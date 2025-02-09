@@ -1,0 +1,49 @@
+{
+  "name": "hrmsapplication",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "start": "nodemon server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google/generative-ai": "^0.17.1",
+    "aws-sdk": "^2.1691.0",
+    "axios": "^1.7.5",
+    "bcrypt": "^5.1.1",
+    "body-parser": "^1.20.2",
+    "compression": "^1.7.4",
+    "connect-livereload": "^0.6.1",
+    "connect-multiparty": "^2.2.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "express-async-handler": "^1.2.0",
+    "express-validator": "^7.2.1",
+    "http-status": "^1.7.4",
+    "jsonwebtoken": "^9.0.2",
+    "livereload": "^0.9.3",
+    "moment": "^2.30.1",
+    "moment-holiday": "^1.5.1",
+    "moment-timezone": "^0.5.45",
+    "mongoose": "^8.6.0",
+    "multer": "^1.4.5-lts.1",
+    "node-cron": "^3.0.3",
+    "node-excel-export": "^1.4.4",
+    "nodemail-aws-ses": "^1.0.4",
+    "nodemailer": "^6.9.16",
+    "nodemon": "^3.1.4",
+    "npm-check": "^6.0.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.12.3",
+    "@babel/node": "^7.12.6",
+    "@babel/preset-env": "^7.12.1",
+    "eslint": "^7.13.0",
+    "nodemon": "^2.0.6"
+  }
+}

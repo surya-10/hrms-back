@@ -75,6 +75,7 @@ require("./routes/Auth/Holiday.route.js")(app);
 require("./routes/Auth/employee.leave.record.route.js")(app)
 require("./routes/Auth/profile.route.js")(app);
 app.use('/api/announcements', announcementRoutes);
+require("./routes/Auth/apply.leave.nlp.route.js")(app)
 
 
 const port = process.env.PORT || 3002;
@@ -92,3 +93,23 @@ cron.schedule("0 0 1 * *", async () => {
   await storeWorkingDays();
 });
 storeWorkingDays();
+
+// const chrono = require('chrono-node');
+
+// const text = "20.02.2025 to 21.02.2025 abcdklnfdosi, 
+// feb 20 2025 to feb 21 2025, 
+// 20 feb 2025 to 21 feb 2025, 
+// feb 20 2025 to 21 feb 2025,
+//  20-02-2025 to 21-02-2025, 
+// 20/02/2025 to 21/02/2025, 
+// fe 20 2025 to fe 21 2025, 
+// mar 20 2025 to mar 21 2025";
+// const results = chrono.parse(text);
+// console.log(results)
+
+// const extractedDates = results.map(date => ({
+//     start: date.start.date().toISOString().split('T')[0],
+//     end: date.end ? date.end.date().toISOString().split('T')[0] : null
+// }));
+
+// console.log(extractedDates);

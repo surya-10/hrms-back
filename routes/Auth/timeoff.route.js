@@ -16,6 +16,7 @@ module.exports = (app) => {
     router.put("/update-timeoff/:id", authBearer, asyncHandler(timeoff.updateTimeoffStatus));
     router.put("/update-timeoff-email/:id", authBearer, asyncHandler(timeoff.updateTimeoffStatusByEmail));
     router.get("/monthly-leaves/:id/:month/:year", authBearer, asyncHandler(timeoff.getMonthlyLeaves));
+    router.post("/send-pending-notifications", authBearer, asyncHandler(timeoff.sendPendingLeaveNotifications));
 
     // router.delete("/delete-employee/:id/:hr_id", authBearer, asyncHandler(employee.deleteEmployee));
     // router.put("/change-employee-status/:id/:hr_id", authBearer, asyncHandler(employee.changeEmployeeStatus));

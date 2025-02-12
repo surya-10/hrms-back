@@ -6,6 +6,7 @@ const nodemailer = require("nodemailer");
 const dotenv = require("dotenv");
 const mongoose = require('mongoose');
 const moment = require("moment");
+const cron = require('node-cron');
 dotenv.config()
 
 const userInfo = db.user;
@@ -24,6 +25,7 @@ exports.createTimeoff = async (req, res) => {
     try {
         const { id } = req.params;
         const { leave_request, date } = req.body;
+        console.log(leave_request, date, id)
 
         // Check permission count if this is a permission request
         if (leave_request.is_permission) {
@@ -1294,7 +1296,7 @@ exports.viewTimeoff = async (req, res) => {
         else if (user.role.role_name == "Manager") {
             let usersWithManager = await userInfo.find({ manager_id: id }, { password: 0 });
             if (!usersWithManager) {
-                return res.status(400).send({ message: "No leave requests raised" })
+                return res.status(200).send({ message: "No leave requests raised" })
             }
             timeoffRequests = timeoffs.flatMap((data) => data.leave_requests.filter((leave) => {
                 if (leave.approved_by == id) {
@@ -1353,13 +1355,7 @@ function convertTo24HourFormat(time) {
 }
 
 const sendEmail = async (res, timeoff, user, email, leave_request, manager) => {
-    console.log("inside mail")
-    // console.log(timeoff)
-    // console.log("xsnjknskng", manager)
-    const createdRequest = timeoff.leave_requests[timeoff.leave_requests.length - 1]
-    // console.log("createdRequest", createdRequest, "createdRequest")
-    // console.log("createdRequest", leave_request, "createdRequest")
-    // console.log(leave_request)
+    const createdRequest = timeoff.leave_requests[timeoff.leave_requests.length - 1];
     const transporter = nodemailer.createTransport({
         service: "gmail",
         auth: {
@@ -1375,65 +1371,156 @@ const sendEmail = async (res, timeoff, user, email, leave_request, manager) => {
         subject: leave_request.is_permission ? "Permission Request" + "-" + leave_request.leave_date[0].start_date + "-" + leave_request.leave_date[0].end_date + "-" + leave_request.leave_date[0].date
             : "New Leave Request" + "-" + leave_request.leave_date[0].start_date + "-" + leave_request.leave_date[0].end_date + "-" + user.first_name,
         html: `
-            <p>Hello,</p>
-            <p>A new leave request has been submitted. Below are the details:</p>
-            <ul>
-                <li><strong>Employee:</strong> ${user.first_name}</li>
-                <li><strong>From Date:</strong> ${leave_request.leave_date[0].start_date}</li>
-                <li><strong>To Date:</strong> ${leave_request.leave_date[0].end_date}</li>
-                <li><strong>Reason:</strong> ${leave_request.comments}</li>
-            </ul>
-            <p>Please review and take action:</p>
-            
-            <div style="margin-top: 20px;">
-               <a href="http://localhost:5173/approve-leave/${user._id}/${createdRequest._id}/${manager._id}?action=approve"
-                    style="display: inline-block; padding: 12px 20px; background-color: #28a745; color: white; 
-                    text-decoration: none; border-radius: 5px; font-size: 16px; font-weight: bold; margin-right: 10px;">
-                    Approve
-                </a>
-                <a href="http://localhost:5173/approve-leave/${createdRequest._id}/${user._id}/${manager._id}?action=reject"
-                    style="display: inline-block; padding: 12px 20px; background-color: #dc3545; color: white; 
-                    text-decoration: none; border-radius: 5px; font-size: 16px; font-weight: bold;">
-                    Reject
-                </a>
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    .container {
+                        font-family: Arial, sans-serif;
+                        max-width: 600px;
+                        margin: 0 auto;
+                        padding: 20px;
+                        background-color: #f9f9f9;
+                        border-radius: 10px;
+                    }
+                    .header {
+                        background-color: #1a73e8;
+                        color: white;
+                        padding: 20px;
+                        border-radius: 8px 8px 0 0;
+                        text-align: center;
+                    }
+                    .content {
+                        background-color: white;
+                        padding: 20px;
+                        border-radius: 0 0 8px 8px;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    }
+                    .details {
+                        margin: 20px 0;
+                        padding: 15px;
+                        background-color: #f5f5f5;
+                        border-radius: 5px;
+                    }
+                    .detail-row {
+                        display: flex;
+                        margin: 10px 0;
+                        padding: 5px 0;
+                        border-bottom: 1px solid #eee;
+                    }
+                    .detail-label {
+                        font-weight: bold;
+                        width: 120px;
+                        color: #666;
+                    }
+                    .detail-value {
+                        flex: 1;
+                        color: #333;
+                    }
+                    .button-container {
+                        margin: 25px 0;
+                        text-align: center;
+                    }
+                    .button {
+                        display: inline-block;
+                        padding: 12px 24px;
+                        margin: 0 10px;
+                        text-decoration: none;
+                        border-radius: 5px;
+                        font-weight: bold;
+                        text-align: center;
+                    }
+                    .approve-btn {
+                        background-color: #28a745;
+                        color: white;
+                    }
+                    .reject-btn {
+                        background-color: #dc3545;
+                        color: white;
+                    }
+                    .dashboard-btn {
+                        background-color: #1a73e8;
+                        color: white;
+                    }
+                    .footer {
+                        margin-top: 20px;
+                        text-align: center;
+                        color: #666;
+                        font-size: 14px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h2 style="margin: 0;">${leave_request.is_permission ? 'New Permission Request' : 'New Leave Request'}</h2>
+                    </div>
+                    <div class="content">
+                        <p>Hello,</p>
+                        <p>A new ${leave_request.is_permission ? 'permission' : 'leave'} request has been submitted. Please review the details below:</p>
+                        
+                        <div class="details">
+                            <div class="detail-row">
+                                <span class="detail-label">Employee:</span>
+                                <span class="detail-value">${user.first_name} ${user.last_name}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">From:</span>
+                                <span class="detail-value">${leave_request.leave_date[0].start_date}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">To:</span>
+                                <span class="detail-value">${leave_request.leave_date[0].end_date}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Reason:</span>
+                                <span class="detail-value">${leave_request.comments}</span>
+                            </div>
+                        </div>
 
-            </div>
-            <div >
-            <a href="http://localhost:5173/manager/view-records"  
-                 style="display: inline-block; margin-top:15px; padding: 12px 20px; background-color:rgb(54, 110, 173); color: white; 
-                    text-decoration: none; border-radius: 5px; font-size: 16px; font-weight: bold;">
-                    Go to Dashboard
-                    </a>
-            </div>
-    
-            <p>Best Regards,</p>
-            <p>Your HR Team</p>
+                        <div class="button-container">
+                            <a href="http://localhost:5173/approve-leave/${user._id}/${createdRequest._id}/${manager._id}?action=approve" 
+                               class="button approve-btn"  style="color:white;">
+                                Approve
+                            </a>
+                            <a href="http://localhost:5173/approve-leave/${createdRequest._id}/${user._id}/${manager._id}?action=reject" 
+                               class="button reject-btn"  style="color:white;">
+                                Reject
+                            </a>
+                        </div>
+                        
+                        <div class="button-container">
+                            <a href="http://localhost:5173/manager/view-records" 
+                               class="button dashboard-btn"  style="color:white;">
+                                Go to Dashboard
+                            </a>
+                        </div>
+
+                        <div class="footer">
+                            <p>Best Regards,<br>Your HR Team</p>
+                            <p style="font-size: 12px; color: #999;">This is an automated message, please do not reply directly to this email.</p>
+                        </div>
+                    </div>
+                </div>
+            </body>
+            </html>
         `
     };
 
-
-
     transporter.sendMail(mailOptions, (error, info) => {
         if (error) {
-            console.log("errors ")
-            console.log("Error sending email:", error);
+            console.error("Error sending email:", error);
         } else {
-            console.log("no errors")
             return res.status(201).send({
                 message: "Time-off created successfully",
                 data: timeoff
             });
         }
     });
-}
+};
+
 const sendEmailHalfDay = async (res, timeoff, user, email, leave_request, manager) => {
-    console.log("inside mail")
-    // console.log(timeoff)
-    // console.log("xsnjknskng", manager)
-    const createdRequest = timeoff.leave_requests[timeoff.leave_requests.length - 1]
-    // console.log("createdRequest", createdRequest, "createdRequest")
-    // console.log("createdRequest", leave_request, "createdRequest")
-    // console.log(leave_request)
+    const createdRequest = timeoff.leave_requests[timeoff.leave_requests.length - 1];
     const transporter = nodemailer.createTransport({
         service: "gmail",
         auth: {
@@ -1444,61 +1531,157 @@ const sendEmailHalfDay = async (res, timeoff, user, email, leave_request, manage
 
     const mailOptions = {
         from: process.env.email,
-        to: "sp659151@gmail.com",
+        to: email,
         cc: user.email,
-        subject:  "New Half-day Request" + "-" + leave_request.leave_date[0].start_date + "-" + leave_request.leave_date[0].end_date + "-" + user.first_name,
+        subject: "New Half-day Request" + "-" + leave_request.leave_date[0].start_date + "-" + leave_request.leave_date[0].end_date + "-" + user.first_name,
         html: `
-            <p>Hello,</p>
-            <p>A new leave request has been submitted. Below are the details:</p>
-            <ul>
-             <li><strong>Date:</strong> ${leave_request.leave_date[0].date}</li>
-                <li><strong>Employee:</strong> ${user.first_name}</li>
-                <li><strong>Time:</strong> ${leave_request.leave_date[0].start_date =="9 AM" ? "First half":"Second haalf"} </li>
-                <li><strong>Reason:</strong> ${leave_request.comments}</li>
-            </ul>
-            <p>Please review and take action:</p>
-            
-            <div style="margin-top: 20px;">
-               <a href="http://localhost:5173/approve-leave/${user._id}/${createdRequest._id}/${manager._id}?action=approve"
-                    style="display: inline-block; padding: 12px 20px; background-color: #28a745; color: white; 
-                    text-decoration: none; border-radius: 5px; font-size: 16px; font-weight: bold; margin-right: 10px;">
-                    Approve
-                </a>
-                <a href="http://localhost:5173/approve-leave/${createdRequest._id}/${user._id}/${manager._id}?action=reject"
-                    style="display: inline-block; padding: 12px 20px; background-color: #dc3545; color: white; 
-                    text-decoration: none; border-radius: 5px; font-size: 16px; font-weight: bold;">
-                    Reject
-                </a>
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    .container {
+                        font-family: Arial, sans-serif;
+                        max-width: 600px;
+                        margin: 0 auto;
+                        padding: 20px;
+                        background-color: #f9f9f9;
+                        border-radius: 10px;
+                    }
+                    .header {
+                        background-color: #6b46c1;
+                        color: white;
+                        padding: 20px;
+                        border-radius: 8px 8px 0 0;
+                        text-align: center;
+                    }
+                    .content {
+                        background-color: white;
+                        padding: 20px;
+                        border-radius: 0 0 8px 8px;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    }
+                    .details {
+                        margin: 20px 0;
+                        padding: 15px;
+                        background-color: #f5f5f5;
+                        border-radius: 5px;
+                    }
+                    .detail-row {
+                        display: flex;
+                        margin: 10px 0;
+                        padding: 5px 0;
+                        border-bottom: 1px solid #eee;
+                    }
+                    .detail-label {
+                        font-weight: bold;
+                        width: 120px;
+                        color: #666;
+                    }
+                    .detail-value {
+                        flex: 1;
+                        color: #333;
+                    }
+                    .button-container {
+                        margin: 25px 0;
+                        text-align: center;
+                    }
+                    .button {
+                        display: inline-block;
+                        padding: 12px 24px;
+                        margin: 0 10px;
+                        text-decoration: none;
+                        border-radius: 5px;
+                        font-weight: bold;
+                        text-align: center;
+                    }
+                    .approve-btn {
+                        background-color: #28a745;
+                        color: white;
+                    }
+                    .reject-btn {
+                        background-color: #dc3545;
+                        color: white;
+                    }
+                    .dashboard-btn {
+                        background-color: #6b46c1;
+                        color: white;
+                    }
+                    .footer {
+                        margin-top: 20px;
+                        text-align: center;
+                        color: #666;
+                        font-size: 14px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h2 style="margin: 0;">New Half-Day Leave Request</h2>
+                    </div>
+                    <div class="content">
+                        <p>Hello,</p>
+                        <p>A new half-day leave request has been submitted. Please review the details below:</p>
+                        
+                        <div class="details">
+                            <div class="detail-row">
+                                <span class="detail-label">Employee:</span>
+                                <span class="detail-value">${user.first_name} ${user.last_name}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Date:</span>
+                                <span class="detail-value">${leave_request.leave_date[0].date}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Time:</span>
+                                <span class="detail-value">${leave_request.leave_date[0].start_date == "9 AM" ? "First half" : "Second half"}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Reason:</span>
+                                <span class="detail-value">${leave_request.comments}</span>
+                            </div>
+                        </div>
 
-            </div>
-            <div >
-            <a href="http://localhost:5173/manager/view-records"  
-                 style="display: inline-block; margin-top:15px; padding: 12px 20px; background-color:rgb(54, 110, 173); color: white; 
-                    text-decoration: none; border-radius: 5px; font-size: 16px; font-weight: bold;">
-                    Go to Dashboard
-                    </a>
-            </div>
-    
-            <p>Best Regards,</p>
-            <p>Your HR Team</p>
+                        <div class="button-container" >
+                            <a href="http://localhost:5173/approve-leave/${user._id}/${createdRequest._id}/${manager._id}?action=approve" 
+                               class="button approve-btn" style="color:white;">
+                                Approve
+                            </a>
+                            <a href="http://localhost:5173/approve-leave/${createdRequest._id}/${user._id}/${manager._id}?action=reject" 
+                               class="button reject-btn" style="color:white;">
+                                Reject
+                            </a>
+                        </div>
+                        
+                        <div class="button-container">
+                            <a href="http://localhost:5173/manager/view-records" 
+                               class="button dashboard-btn" style="color:white;">
+                                Go to Dashboard
+                            </a>
+                        </div>
+
+                        <div class="footer">
+                            <p>Best Regards,<br>Your HR Team</p>
+                            <p style="font-size: 12px; color: #999;">This is an automated message, please do not reply directly to this email.</p>
+                        </div>
+                    </div>
+                </div>
+            </body>
+            </html>
         `
     };
 
-
-
     transporter.sendMail(mailOptions, (error, info) => {
         if (error) {
-            console.log("errors ")
-            console.log("Error sending email:", error);
+            console.error("Error sending email:", error);
         } else {
-            console.log("no errors")
             return res.status(201).send({
                 message: "Time-off created successfully",
                 data: timeoff
             });
         }
     });
-}
+};
 
 const triggerEmail = (user, data, email, res, comments) => {
     const transporter = nodemailer.createTransport({
@@ -1510,27 +1693,126 @@ const triggerEmail = (user, data, email, res, comments) => {
     });
     const mailOptions = {
         from: process.env.email,
-        to: "sp659151@gmail.com",
+        to: email,
         cc: user.email,
         subject: data.is_permission ? "Permission Request" + " - " + data.status_name + "-" + user.first_name + "-" + data.leave_date[0].start_date + " to " + data.leave_date[0].end_date + " Date-" + data.leave_date[0].date :
-        data.is_half_day_leave ? "Half day request"+"-"+data.status_name + "-" + user.first_name:
-         "Leave request" + " - " + data.status_name + "-" + user.first_name + "-" + data.leave_date[0].start_date + "/" + data.leave_date[0].end_date,
+            data.is_half_day_leave ? "Half day request" + "-" + data.status_name + "-" + user.first_name :
+                "Leave request" + " - " + data.status_name + "-" + user.first_name + "-" + data.leave_date[0].start_date + "/" + data.leave_date[0].end_date,
         html: `
-            <p>Hello ${user.first_name}</p>
-            <p>Your leave request has been ${data.status_name}. Below are the details:</p>
-            <ul>
-                <li><strong>Employee:</strong> ${user.first_name}</li>
-                <li><strong>From Date:</strong> ${data.leave_date[0].start_date}</li>
-                <li><strong>To Date:</strong> ${data.leave_date[0].end_date}</li>
-                ${data.status_name === "Approved" ? `
-                <li><strong>Total Leaves Taken This Month:</strong> ${data.total_leave_taken || 0} day(s)</li>
-                <li><strong>Half Days Taken This Month:</strong> ${data.half_days_taken || 0}</li>
-                <li><strong>Loss of Pay:</strong> ${data.total_loss_of_pay || 0} day(s)</li>
-                ` : ''}
-                <li>${comments == "Approved" ? "" : data.approval_comments}</li>
-            </ul>
-            
-            <p>Best Regards,</p>
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    .container {
+                        font-family: Arial, sans-serif;
+                        max-width: 600px;
+                        margin: 0 auto;
+                        padding: 20px;
+                        background-color: #f9f9f9;
+                        border-radius: 10px;
+                    }
+                    .header {
+                        background-color: ${data.status_name === "Approved" ? "#28a745" : "#dc3545"};
+                        color: white;
+                        padding: 20px;
+                        border-radius: 8px 8px 0 0;
+                        text-align: center;
+                    }
+                    .content {
+                        background-color: white;
+                        padding: 20px;
+                        border-radius: 0 0 8px 8px;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    }
+                    .details {
+                        margin: 20px 0;
+                        padding: 15px;
+                        background-color: #f5f5f5;
+                        border-radius: 5px;
+                    }
+                    .detail-row {
+                        display: flex;
+                        margin: 10px 0;
+                        padding: 5px 0;
+                        border-bottom: 1px solid #eee;
+                    }
+                    .detail-label {
+                        font-weight: bold;
+                        width: 180px;
+                        color: #666;
+                    }
+                    .detail-value {
+                        flex: 1;
+                        color: #333;
+                    }
+                    .status-badge {
+                        display: inline-block;
+                        padding: 8px 16px;
+                        border-radius: 20px;
+                        font-weight: bold;
+                        color: white;
+                        background-color: ${data.status_name === "Approved" ? "#28a745" : "#dc3545"};
+                    }
+                    .footer {
+                        margin-top: 20px;
+                        text-align: center;
+                        color: #666;
+                        font-size: 14px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h2 style="margin: 0;">Leave Request ${data.status_name}</h2>
+                    </div>
+                    <div class="content">
+                        <p>Hello ${user.first_name},</p>
+                        <p>Your ${data.is_permission ? 'permission' : data.is_half_day_leave ? 'half-day leave' : 'leave'} request has been <span class="status-badge">${data.status_name}</span></p>
+                        
+                        <div class="details">
+                            <div class="detail-row">
+                                <span class="detail-label">Employee:</span>
+                                <span class="detail-value">${user.first_name} ${user.last_name}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">From:</span>
+                                <span class="detail-value">${data.leave_date[0].start_date}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">To:</span>
+                                <span class="detail-value">${data.leave_date[0].end_date}</span>
+                            </div>
+                            ${data.status_name === "Approved" ? `
+                            <div class="detail-row">
+                                <span class="detail-label">Total Leaves This Month:</span>
+                                <span class="detail-value">${data.total_leave_taken || 0} day(s)</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Half Days This Month:</span>
+                                <span class="detail-value">${data.half_days_taken || 0}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Loss of Pay:</span>
+                                <span class="detail-value">${data.total_loss_of_pay || 0} day(s)</span>
+                            </div>
+                            ` : ''}
+                            ${comments !== "Approved" ? `
+                            <div class="detail-row">
+                                <span class="detail-label">Comments:</span>
+                                <span class="detail-value">${data.approval_comments}</span>
+                            </div>
+                            ` : ''}
+                        </div>
+
+                        <div class="footer">
+                            <p>Best Regards,<br>Your HR Team</p>
+                            <p style="font-size: 12px; color: #999;">This is an automated message, please do not reply directly to this email.</p>
+                        </div>
+                    </div>
+                </div>
+            </body>
+            </html>
         `
     };
     transporter.sendMail(mailOptions, (error, info) => {
@@ -1593,3 +1875,145 @@ exports.getMonthlyLeaves = async (req, res) => {
         });
     }
 };
+
+const sendPendingLeaveNotifications = async () => {
+    try {
+        // Find all timeoff requests with pending status
+        const pendingRequests = await timeoffInfo.aggregate([
+            {
+                $unwind: "$leave_requests"
+            },
+            {
+                $match: {
+                    "leave_requests.status_name": "Requested"
+                }
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "user_id",
+                    foreignField: "_id",
+                    as: "employee"
+                }
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "employee.manager_id",
+                    foreignField: "_id",
+                    as: "manager"
+                }
+            },
+            {
+                $group: {
+                    _id: "$manager._id",
+                    managerEmail: { $first: "$manager.email" },
+                    managerName: { $first: "$manager.first_name" },
+                    pendingRequests: {
+                        $push: {
+                            employeeName: { $first: "$employee.first_name" },
+                            leaveDate: "$leave_requests.leave_date",
+                            leaveType: {
+                                $cond: [
+                                    "$leave_requests.is_half_day_leave",
+                                    "Half Day",
+                                    {
+                                        $cond: [
+                                            "$leave_requests.is_permission",
+                                            "Permission",
+                                            "Full Day"
+                                        ]
+                                    }
+                                ]
+                            },
+                            requestDate: "$leave_requests.created_at",
+                            comments: "$leave_requests.comments",
+                            requestId: "$leave_requests._id",
+                            employeeId: "$user_id"
+                        }
+                    }
+                }
+            }
+        ]);
+
+        if (!pendingRequests.length) {
+            console.log("No pending leave requests found");
+            return;
+        }
+
+        // Email configuration
+        const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user: process.env.email,
+                pass: process.env.pass
+            }
+        });
+
+        // Send emails to each manager
+        for (const managerData of pendingRequests) {
+            if (!managerData.managerEmail) continue;
+
+            const pendingRequestsHTML = managerData.pendingRequests.map(request => `
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #ddd;">${request.employeeName}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">${new Date(request.leaveDate[0].start_date).toLocaleDateString()}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">${request.leaveType}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">${request.comments}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">
+                        <a href="${process.env.FRONTEND_URL}/approve-leave/${request.employeeId}/${request.requestId}/${managerData._id}?action=approve"
+                           style="background-color: #28a745; color: white; padding: 5px 10px; text-decoration: none; border-radius: 3px; margin-right: 5px;">
+                           Approve
+                        </a>
+                        <a href="${process.env.FRONTEND_URL}/approve-leave/${request.employeeId}/${request.requestId}/${managerData._id}?action=reject"
+                           style="background-color: #dc3545; color: white; padding: 5px 10px; text-decoration: none; border-radius: 3px;">
+                           Reject
+                        </a>
+                    </td>
+                </tr>
+            `).join('');
+
+            const mailOptions = {
+                from: process.env.email,
+                to: managerData.managerEmail,
+                subject: 'Pending Leave Requests - Action Required',
+                html: `
+                    <div style="font-family: Arial, sans-serif;">
+                        <h2>Pending Leave Requests</h2>
+                        <p>Hello ${managerData.managerName},</p>
+                        <p>You have the following leave requests pending for approval:</p>
+                        
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                            <thead>
+                                <tr style="background-color: #f8f9fa;">
+                                    <th style="padding: 8px; border: 1px solid #ddd;">Employee</th>
+                                    <th style="padding: 8px; border: 1px solid #ddd;">Leave Date</th>
+                                    <th style="padding: 8px; border: 1px solid #ddd;">Type</th>
+                                    <th style="padding: 8px; border: 1px solid #ddd;">Comments</th>
+                                    <th style="padding: 8px; border: 1px solid #ddd;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${pendingRequestsHTML}
+                            </tbody>
+                        </table>
+                        
+                        <p style="margin-top: 20px;">Please review and take appropriate action on these requests.</p>
+                        <p>Best regards,<br>HR Team</p>
+                    </div>
+                `
+            };
+
+            await transporter.sendMail(mailOptions);
+            console.log(`Notification sent to manager: ${managerData.managerEmail}`);
+        }
+
+    } catch (error) {
+        console.error('Error sending pending leave notifications:', error);
+    }
+};
+cron.schedule('30 10 * * *', () => {
+    console.log('Running pending leave notifications cron job at 10:30 AM');
+    sendPendingLeaveNotifications();
+});
+exports.sendPendingLeaveNotifications = sendPendingLeaveNotifications;

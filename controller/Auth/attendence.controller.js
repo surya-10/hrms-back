@@ -20,6 +20,29 @@ const breakDetails = db.breakRecords;
 const permissionInfo = db.permissionRecords;
 const leaveRecordInfo = db.employeeLeaveRecorder;
 
+const checkApprovedLeave = async (userId, date) => {
+    try {
+        const timeoff = await timeoffInfo.findOne({ user_id: userId });
+        if (!timeoff) return null;
+
+        // Find any approved leave request for the given date
+        const approvedLeave = timeoff.leave_requests.find(request => {
+            if (request.status_name !== "Approved") return false;
+            
+            const leaveDate = new Date(request.leave_date[0].date);
+            const checkDate = new Date(date);
+            
+            return leaveDate.getDate() === checkDate.getDate() &&
+                   leaveDate.getMonth() === checkDate.getMonth() &&
+                   leaveDate.getFullYear() === checkDate.getFullYear();
+        });
+
+        return approvedLeave;
+    } catch (error) {
+        console.error("Error checking approved leave:", error);
+        return null;
+    }
+};
 
 exports.createCheckIn = async (req, res) => {
     try {
@@ -38,6 +61,25 @@ exports.createCheckIn = async (req, res) => {
             const user = await userInfo.findOne({ _id: id, is_deleted: false }, { password: 0 });
             if (!user) {
                 return res.status(404).json({ message: "User not found" });
+            }
+
+            // Check for approved leaves
+            const approvedLeave = await checkApprovedLeave(id, date);
+            if (approvedLeave) {
+                if (!approvedLeave.is_half_day_leave) {
+                    // Full day leave - no check-in allowed
+                    return res.status(400).json({ message: "Cannot check-in on approved full-day leave" });
+                } else {
+                    // Half day leave - check timing
+                    const isFirstHalf = approvedLeave.leave_date[0].start_date === "9 AM";
+                    const currentHour = new Date().getHours();
+                    
+                    if (isFirstHalf && currentHour < 14) { // Before 2 PM
+                        return res.status(400).json({ message: "Cannot check-in during approved first half leave" });
+                    } else if (!isFirstHalf && currentHour >= 14) { // After 2 PM
+                        return res.status(400).json({ message: "Cannot check-in during approved second half leave" });
+                    }
+                }
             }
 
             let attendanceRecord = await loginInInfo.findOne({ user_id: id });
@@ -247,7 +289,7 @@ exports.getAllCheckIn = async (req, res) => {
         // console.log(userIds)
 
         if (userIds.length === 0) {
-            return res.status(400).json({ message: "No data found" });
+            return res.status(200).json({ message: "No data found" });
         }
         const attendanceData = await loginInInfo.find({
             user_id: { $in: userIds }
@@ -279,7 +321,7 @@ exports.getAllCheckInAdmin = async (req, res) => {
         console.log(userIds)
 
         if (userIds.length === 0) {
-            return res.status(400).json({ message: "No data found" });
+            return res.status(200).json({ message: "No data found" });
         }
         const attendanceData = await loginInInfo.find({
             user_id: { $in: userIds }

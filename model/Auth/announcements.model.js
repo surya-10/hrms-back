@@ -5,7 +5,7 @@ const announcementSchema = new mongoose.Schema({
   description: { type: String, required: true },
   target: { type: String, required: true, enum: ['All', 'Admin', 'Employee'] },
   priority: { type: String, enum: ['Low', 'Medium', 'High'], default: 'Low' },
-  read: { type: Boolean, default: false },
+  readBy: { type: [String], default: [] },
   createdAt: { type: Date, default: Date.now },
 });
 
